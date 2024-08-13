@@ -23,7 +23,7 @@ class RemoteGroups(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/honue/MoviePilot-Plugins/main/icons/words.png"
     # 插件版本
-    plugin_version = "1.0"
+    plugin_version = "1.1"
     # 插件作者
     plugin_author = "xcao"
     # 作者主页
@@ -47,11 +47,11 @@ class RemoteGroups(_PluginBase):
         # 停止后台任务
         self.stop_service()
         if config:
-            self._enable = config.get("enable") or False
-            self._onlyonce = config.get("onlyonce") or False
+            self._enable = config.get("enable") if config.get("enable") is not None else False
+            self._onlyonce = config.get("onlyonce") if config.get("onlyonce") is not None else False
             self._cron = config.get("cron") or '30 4 * * *'
             self._file_urls = config.get("file_urls") or ''
-            self._flitter = config.get("flitter") or True
+            self._flitter = config.get("flitter") if config.get("flitter") is not None else False
             # config操作
             self.systemconfig = SystemConfigOper()
 
@@ -82,12 +82,12 @@ class RemoteGroups(_PluginBase):
     def get_file_content(self, file_urls: list) -> List[str]:
         ret: List[str] = ['======以下识别词由RemoteGroups插件添加======']
         for file_url in file_urls:
-            if file_url.find("etherpad") and file_url.find("export") < 0:
+            if file_url.count("etherpad") != 0 and file_url.find("export") == 0:
                 real_url = file_url + "/export/txt"
             else:
                 real_url = file_url
             response = RequestUtils(proxies=settings.PROXY,
-                                          headers=settings.GITHUB_HEADERS if real_url.find("git") else None,
+                                          headers=settings.GITHUB_HEADERS if real_url.count("github") else None,
                                           timeout=15).get_res(real_url)
             if not response:
                 raise Exception(f"文件 {file_url} 下载失败！")

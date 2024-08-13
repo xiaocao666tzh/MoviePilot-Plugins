@@ -2,7 +2,7 @@
   "RemoteGroups": {
     "name": "共享字幕组",
     "description": "从Github、Etherpad远程文件中，获取共享字幕组并添加。",
-    "version": "1.0",
+    "version": "1.1",
     "icon": "https://raw.githubusercontent.com/honue/MoviePilot-Plugins/main/icons/words.png",
     "author": "xcao",
     "level": 1
