@@ -21,9 +21,9 @@ class RemoteGroups(_PluginBase):
     # 插件描述
     plugin_desc = "从Github、Etherpad远程文件中，获取共享字幕组并添加"
     # 插件图标
-    plugin_icon = "https://raw.githubusercontent.com/honue/MoviePilot-Plugins/main/icons/words.png"
+    plugin_icon = "words.png"
     # 插件版本
-    plugin_version = "1.1"
+    plugin_version = "1.2"
     # 插件作者
     plugin_author = "xcao"
     # 作者主页
@@ -42,6 +42,7 @@ class RemoteGroups(_PluginBase):
     _flitter = True
     # 定时器
     _scheduler = None
+    systemconfig = None
 
     def init_plugin(self, config: dict = None):
         # 停止后台任务
@@ -49,29 +50,20 @@ class RemoteGroups(_PluginBase):
         if config:
             self._enable = config.get("enable") if config.get("enable") is not None else False
             self._onlyonce = config.get("onlyonce") if config.get("onlyonce") is not None else False
+            self._flitter = config.get("flitter") if config.get("flitter") is not None else False
             self._cron = config.get("cron") or '30 4 * * *'
             self._file_urls = config.get("file_urls") or ''
-            self._flitter = config.get("flitter") if config.get("flitter") is not None else False
             # config操作
             self.systemconfig = SystemConfigOper()
 
-        if self._enable or self._onlyonce:
+        if self._onlyonce:
             self._scheduler = BackgroundScheduler(timezone=settings.TZ)
-            if self._enable and self._cron:
-                logger.info(f"获取远端字幕组,订阅服务启动，周期：{self._cron}")
-                try:
-                    self._scheduler.add_job(func=self.__task,
-                                            trigger=CronTrigger.from_crontab(self._cron),
-                                            name="获取远端字幕组")
-                except Exception as e:
-                    logger.error(f"获取远端字幕组,订阅服务启动失败，错误信息：{str(e)}")
-            if self._onlyonce:
-                logger.info("获取远端字幕组,订阅服务启动，立即运行一次")
-                self._scheduler.add_job(func=self.__task, trigger='date',
-                                        run_date=datetime.datetime.now(
-                                            tz=pytz.timezone(settings.TZ)) + datetime.timedelta(seconds=3)
-                                        )
-                self._onlyonce = False
+            logger.info("获取远端字幕组,订阅服务启动，立即运行一次")
+            self._scheduler.add_job(func=self.__task, trigger='date',
+                                    run_date=datetime.datetime.now(
+                                        tz=pytz.timezone(settings.TZ)) + datetime.timedelta(seconds=3)
+                                    )
+            self._onlyonce = False
             self.__update_config()
             if self._scheduler.get_jobs():
                 # 启动服务
@@ -80,22 +72,24 @@ class RemoteGroups(_PluginBase):
 
     @retry(Exception, tries=3, delay=5, backoff=2, logger=logger)
     def get_file_content(self, file_urls: list) -> List[str]:
-        ret: List[str] = ['======以下识别词由RemoteGroups插件添加======']
+        ret: List[str] = ['#========以下字幕组由 RemoteGroups 插件添加========#']
         for file_url in file_urls:
-            if file_url.count("etherpad") != 0 and file_url.find("export") == 0:
+            if file_url.count("etherpad") != 0 and file_url.count("export") == 0:
                 real_url = file_url + "/export/txt"
             else:
                 real_url = file_url
             response = RequestUtils(proxies=settings.PROXY,
-                                          headers=settings.GITHUB_HEADERS if real_url.count("github") else None,
-                                          timeout=15).get_res(real_url)
+                                    headers=settings.GITHUB_HEADERS if real_url.count("github") else None,
+                                    timeout=15).get_res(real_url)
             if not response:
-                raise Exception(f"文件 {file_url} 下载失败！")
+                raise Exception(f"文件 {real_url} 下载失败！")
             elif response.status_code != 200:
-                raise Exception(f"下载文件 {file_url} 失败：{response.status_code} - {response.reason}")
+                raise Exception(f"下载文件 {real_url} 失败：{response.status_code} - {response.reason}")
             text = response.content.decode('utf-8')
             if text.find("doctype html") > 0:
-                raise Exception(f"下载文件 {file_url} 失败：{response.status_code} - {response.reason}")
+                raise Exception(f"下载文件 {real_url} 失败：{response.status_code} - {response.reason}")
+            if "try again later" in text:
+                raise Exception(f"下载文件 {real_url} 失败：{text}")
             identifiers: List[str] = text.split('\n')
             ret += identifiers
         # flitter 过滤空行
@@ -136,7 +130,7 @@ class RemoteGroups(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 3
+                                    'md': 2
                                 },
                                 'content': [
                                     {
@@ -151,7 +145,7 @@ class RemoteGroups(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 3
+                                    'md': 2
                                 },
                                 'content': [
                                     {
@@ -181,7 +175,7 @@ class RemoteGroups(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 3
+                                    'md': 4
                                 },
                                 'content': [
                                     {
@@ -211,7 +205,7 @@ class RemoteGroups(_PluginBase):
                                         'props': {
                                             'model': 'file_urls',
                                             'rows': 6,
-                                            'label': '远程文件url（若有多个，一行一个）',
+                                            'label': '远程文件地址（一行一个）',
                                             'placeholder': '如果是Github文件地址请注意填写包含raw的! 这个才是文件地址，其他的是这个文件的页面地址',
                                         }
                                     }
@@ -233,20 +227,14 @@ class RemoteGroups(_PluginBase):
                                         'props': {
                                             'type': 'success',
                                             'variant': 'tonal',
-                                            'text': '本插件根据共享识别词插件进行修改，感谢原作者'
-                                        }
-                                    }, {
-                                        'component': 'VAlert',
-                                        'props': {
-                                            'type': 'success',
-                                            'variant': 'tonal',
-                                            'text': '下面提供个共享词库给大家，希望大家能多多PR'
+                                            'text': '下面提供个共享词库给大家，希望大家能多多PR\n本插件根据共享识别词插件修改，谢谢原作者'
                                         }
                                     }
                                 ]
                             }
                         ]
-                    }, {
+                    },
+                    {
                         'component': 'VRow',
                         'content': [
                             {
@@ -262,7 +250,7 @@ class RemoteGroups(_PluginBase):
                                             'variant': 'tonal',
                                             'text': 'https://raw.githubusercontent.com/xiaocao666tzh/MoviePilot-Plugins/main/content/RemoteGroups.txt'
                                         }
-                                    },
+                                    }
                                 ]
                             }
                         ]
@@ -274,7 +262,7 @@ class RemoteGroups(_PluginBase):
             "onlyonce": False,
             "flitter": True,
             "cron": '30 4 * * *',
-            "file_urls": '',
+            "file_urls": "https://raw.githubusercontent.com/xiaocao666tzh/MoviePilot-Plugins/main/content/RemoteGroups.txt"
         }
 
     def __update_config(self):
@@ -308,3 +296,23 @@ class RemoteGroups(_PluginBase):
 
     def get_api(self) -> List[Dict[str, Any]]:
         pass
+
+    def get_service(self) -> List[Dict[str, Any]]:
+        """
+        注册插件公共服务
+        [{
+            "id": "服务ID",
+            "name": "服务名称",
+            "trigger": "触发器：cron/interval/date/CronTrigger.from_crontab()",
+            "func": self.xxx,
+            "kwargs": {} # 定时器参数
+        }]
+        """
+        if self._enable and self._cron:
+            return [{
+                "id": "RemoteIdentifiers",
+                "name": "获取远端字幕组",
+                "trigger": CronTrigger.from_crontab(self._cron),
+                "func": self.__task,
+                "kwargs": {}
+            }]
