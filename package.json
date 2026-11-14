@@ -6,5 +6,13 @@
     "icon": "https://raw.githubusercontent.com/honue/MoviePilot-Plugins/main/icons/words.png",
     "author": "xcao",
     "level": 1
+  },
+  "TorrentBridge": {
+    "name": "Torrent Bridge",
+    "description": "返回种子文件。",
+    "version": "1.0.0",
+    "author": "xcao",
+    "level": 1,
+    "v2": true
   }
 }
